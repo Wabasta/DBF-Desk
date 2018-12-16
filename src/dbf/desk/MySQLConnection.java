@@ -20,7 +20,7 @@ public class MySQLConnection {
     static String dbname = "";
 
     public MySQLConnection() {
-
+        
     }
 
     public static Connection ConnectMySQL(String dbname) {

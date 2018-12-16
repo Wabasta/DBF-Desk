@@ -16,7 +16,10 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -25,6 +28,7 @@ import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JTable;
 import javax.swing.table.DefaultTableModel;
+import org.apache.commons.lang.StringEscapeUtils;
 
 /**
  * @author Nawaz Sarwar
@@ -47,6 +51,7 @@ public class Dashboard extends javax.swing.JFrame {
     String DBFfileNamePath = "";
     String onlyDBFfileName = "";
     int DBFnumberOfFields = 0;
+    int DBFnumberOfRecords = 0;
 
     ArrayList<String> DBFfieldNames = new ArrayList<String>();
     ArrayList<String> DBFfieldType = new ArrayList<String>();
@@ -57,6 +62,25 @@ public class Dashboard extends javax.swing.JFrame {
 
     public Dashboard() {
         initComponents();
+    }
+
+    public void browseFile() {
+        final JFileChooser fc = new JFileChooser("/Users/nawazsarwar/Desktop");
+//        fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        int response = fc.showOpenDialog(null);
+
+        if (response == JFileChooser.APPROVE_OPTION) {
+            txt_custombasedir.setText(fc.getSelectedFile().toString());
+            DBFfileNamePath = txt_custombasedir.getText();
+            onlyDBFfileName = fc.getSelectedFile().getName();
+            viewDBFByJavaDBFLibrary();
+
+//            String t = replaceAllSymbols(onlyDBFfileName);
+//            System.out.println(":" + t + ":");
+            txt_newtablename.setText(replaceAllSymbols(onlyDBFfileName));
+        } else {
+            JOptionPane.showMessageDialog(rootPane, "File selection operation was cancelled");
+        }
     }
 
     public void viewDBFByJavaDBFLibrary() {
@@ -72,7 +96,11 @@ public class Dashboard extends javax.swing.JFrame {
 
             // get the field count if you want for some reasons like the following
             DBFnumberOfFields = reader.getFieldCount();
-            System.out.println("Total Number of Fields :" + DBFnumberOfFields + ":");
+            DBFnumberOfRecords = reader.getRecordCount();
+
+//            System.out.println("Total Number of Fields in "+onlyDBFfileName+" :" + DBFnumberOfFields + ":");
+//            System.out.println("Total Number of Rows in "+onlyDBFfileName+":" + DBFnumberOfRecords + ":");
+            lbl_filedetails.setText("File :" + onlyDBFfileName + "\t\t\t\tTotal Number of Fields:" + DBFnumberOfFields + "\t\t\t\tTotal Number of Rows:" + DBFnumberOfRecords);
             // use this count to fetch all field information
             // if required
 
@@ -112,22 +140,7 @@ public class Dashboard extends javax.swing.JFrame {
         }
     }
 
-    public void browseFile() {
-        final JFileChooser fc = new JFileChooser("/Users/nawazsarwar/Desktop");
-//        fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        int response = fc.showOpenDialog(null);
-
-        if (response == JFileChooser.APPROVE_OPTION) {
-            txt_custombasedir.setText(fc.getSelectedFile().toString());
-            DBFfileNamePath = txt_custombasedir.getText();
-            onlyDBFfileName = fc.getSelectedFile().getName();
-            viewDBFByJavaDBFLibrary();
-        } else {
-            JOptionPane.showMessageDialog(rootPane, "File selection operation was cancelled");
-        }
-    }
-
-    public void fetchTables() throws SQLException {
+    public void fetchMySQLtables() throws SQLException {
         String dbname = cbo_dbname.getSelectedItem().toString();
         String temp_columnname = "Tables_in_" + dbname;
         conn = MySQLConnection.ConnectMySQL(dbname);
@@ -146,7 +159,7 @@ public class Dashboard extends javax.swing.JFrame {
 //        btn_fetchstructure.setEnabled(true);
     }
 
-    public void fetchTableStructure() throws SQLException {
+    public void fetchMySQLtableStructure() throws SQLException {
 //        fields.removeAll(fields);
 //        String dbname = cbo_dbname.getSelectedItem().toString();
 //        tblname = cbo_tablename.getSelectedItem().toString();
@@ -175,34 +188,46 @@ public class Dashboard extends javax.swing.JFrame {
 //        btn_generateselected.setEnabled(true);
     }
 
-    public void createTable() {
+    public void createMySQLtable() {
 
         MySQLdatabase = cbo_dbname.getSelectedItem().toString();
-        MySQLtableName = txt_newtablename.getText().trim();
+        MySQLtableName = replaceAllSymbols(txt_newtablename.getText().trim());
 
         String useDatabase = "USE " + MySQLdatabase;
-        String sqlStart = "CREATE TABLE " + MySQLtableName + " (";
+        String sqlStart = "CREATE TABLE `" + MySQLtableName + "` ( `"+MySQLtableName+"_id` int(11) NOT NULL, ";
         String sqlBody = "";
-        String sqlEnd = ")";
+        String sqlEnd = ") ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci COMMENT='Table created using utility developed by Nawaz Sarwar'";
         String finalSQL = "";
 
         for (int i = 0; i < DBFnumberOfFields; i++) {
+
+            String fieldName = DBFfieldNames.get(i);
+            String fieldType = DBFfieldType.get(i);
+            String fieldWidth = DBFfieldWidth.get(i);
+            String fieldNull = DBFfieldNull.get(i);
+
+            String s = fieldTypeConversiontoMySQL(fieldName, fieldType, fieldWidth, fieldNull);
+
             if ((i + 1) == DBFnumberOfFields) {
-                sqlBody += DBFfieldNames.get(i) + " " + DBFfieldType.get(i) + "(" + DBFfieldWidth.get(i) + ") " + MySQLNull(DBFfieldNull.get(i)) + " ";
+                sqlBody += s + " ";
                 fieldsSQL += "`" + DBFfieldNames.get(i) + "`";
             } else {
-                sqlBody += DBFfieldNames.get(i) + " " + DBFfieldType.get(i) + "(" + DBFfieldWidth.get(i) + ") " + MySQLNull(DBFfieldNull.get(i)) + ", ";
+                sqlBody += s + ", ";
                 fieldsSQL += "`" + DBFfieldNames.get(i) + "`, ";
             }
+
         }
 
         finalSQL = sqlStart + sqlBody + sqlEnd;
-        System.out.println(finalSQL);
+//        System.out.println(finalSQL);
 
         try {
             stmt = conn.createStatement();
             ResultSet rsuse = stmt.executeQuery(useDatabase);
             int rs = stmt.executeUpdate(finalSQL);
+            rs = stmt.executeUpdate("ALTER TABLE `" + MySQLtableName + "` ADD PRIMARY KEY (`" + MySQLtableName + "_id`);");
+            rs = stmt.executeUpdate("ALTER TABLE `" + MySQLtableName + "` MODIFY `" + MySQLtableName + "_id` int(11) NOT NULL AUTO_INCREMENT;");
+            rs = stmt.executeUpdate("COMMIT;");
         } catch (SQLException ex) {
             Logger.getLogger(Dashboard.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -211,7 +236,7 @@ public class Dashboard extends javax.swing.JFrame {
     public void dumpToMySQLtable() throws FileNotFoundException {
 
         String useDatabase = "USE " + MySQLdatabase;
-        String startSQL = "INSERT INTO `" + MySQLtableName + "` (";
+        String startSQL = "INSERT IGNORE INTO `" + MySQLtableName + "` (";
 //        String fieldsSQL = "";
         String middleSQL = ") VALUES (";
         String dataSQL = "";
@@ -227,47 +252,88 @@ public class Dashboard extends javax.swing.JFrame {
         while ((rowObjects = reader.nextRecord()) != null) {
             DBFrowData.removeAll(DBFrowData);
             for (int i = 0; i < rowObjects.length; i++) {
+
                 if (rowObjects[i] != null) {
+//                    String cell = StringEscapeUtils.escapeSql(rowObjects[i].toString());
+                    String cell = dataConversionToMySQL(rowObjects[i].toString(), i);
                     DBFrowData.add(rowObjects[i].toString());
 
                     if ((i + 1) == rowObjects.length) {
-                        dataSQL += "'" + rowObjects[i].toString() + "'";
+                        dataSQL += "'" + cell + "'";
                     } else {
-                        dataSQL += "'" + rowObjects[i].toString() + "', ";
+                        dataSQL += "'" + cell + "', ";
                     }
 
 //                    System.out.print(rowObjects[i].toString()+"\t");
                 } else {
+                    String cell = "NULL";
                     DBFrowData.add("NULL");
 
                     if ((i + 1) == rowObjects.length) {
-                        dataSQL += "'" + rowObjects[i].toString() + "'";
+                        dataSQL += "" + cell + "";
                     } else {
-                        dataSQL += "'" + rowObjects[i].toString() + "', ";
+                        dataSQL += "" + cell + ", ";
                     }
 
 //                    System.out.print("NULL\n");
                 }
             }
-//            model.addRow(rowObjects);
-//            System.out.println("");
             //Start inserting the data here
             String finalSQL = startSQL + fieldsSQL + middleSQL + dataSQL + endSQL;
-            
+            System.out.println(finalSQL);
+
             try {
                 stmt = conn.createStatement();
                 ResultSet rsuse = stmt.executeQuery(useDatabase);
                 int rs = stmt.executeUpdate(finalSQL);
             } catch (SQLException ex) {
+//                System.err.println(ex);
                 Logger.getLogger(Dashboard.class.getName()).log(Level.SEVERE, null, ex);
             }
-            
-            System.out.println(finalSQL);
+
+//            System.out.println(finalSQL);
             dataSQL = "";
             finalSQL = "";
 
             DBFentireData.add(DBFrowData);
         }
+    }
+
+    public String fieldTypeConversiontoMySQL(String fieldName, String fieldType, String fieldWidth, String fieldNull) {
+
+        fieldName = fieldName;
+        fieldNull = "NULL";
+
+        if (fieldType.equals("CHARACTER")) {
+            fieldType = " VARCHAR";
+            fieldWidth = " (" + fieldWidth + ") COLLATE utf8_unicode_ci ";
+        } else if (fieldType.equals("NUMERIC")) {
+            fieldType = " DOUBLE";
+            fieldWidth = " ";
+        } else if (fieldType.equals("DATE")) {
+            fieldType = " DATE";
+            fieldWidth = " ";
+        }
+
+//        System.out.println(fieldName+fieldType+fieldWidth+fieldNull);
+        return fieldName + fieldType + fieldWidth + fieldNull;
+    }
+
+    private String dataConversionToMySQL(String cell, int index) {
+        if (DBFfieldType.get(index).equals("DATE")) {
+            try {
+                Date date = new SimpleDateFormat("E MMM dd hh:mm:ss z yyyy").parse(cell); //This formating is meant for converting FOXPRO date
+//            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+                java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
+                cell = sdf.format(date);
+            } catch (ParseException ex) {
+                Logger.getLogger(Dashboard.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        } else {
+            cell = StringEscapeUtils.escapeSql(cell);
+        }
+
+        return cell;
     }
 
     private String MySQLNull(String DBFfieldNull) {
@@ -285,7 +351,7 @@ public class Dashboard extends javax.swing.JFrame {
         String sql = "SHOW DATABASES";
         ResultSet rs = stmt.executeQuery(sql);
         while (rs.next()) {
-            System.out.println("Database name :" + rs.getString("Database"));
+//            System.out.println("Database name :" + rs.getString("Database"));
             cbo_dbname.addItem(rs.getString("Database"));
         }
     }
@@ -329,6 +395,30 @@ public class Dashboard extends javax.swing.JFrame {
         writer.close();
     }
 
+    private String escapeStringForMySQL(String s) {
+        return s.replaceAll("\\", "\\\\")
+                .replaceAll("\b", "\\b")
+                .replaceAll("\n", "\\n")
+                .replaceAll("\r", "\\r")
+                .replaceAll("\t", "\\t")
+                .replaceAll("\\x1A", "\\Z")
+                .replaceAll("\\x00", "\\0")
+                .replaceAll("'", "\\'")
+                .replaceAll("\"", "\\\"");
+    }
+
+    private String escapeWildcardsForMySQL(String s) {
+        return escapeStringForMySQL(s)
+                .replaceAll("%", "\\%")
+                .replaceAll("_", "\\_");
+    }
+
+    private String replaceAllSymbols(String s) {
+//        return s.replaceAll("[\\-\\+\\.\\^:,]","");
+        return s.replaceAll("[^\\w\\s]", "")
+                .replaceAll(" ", "");
+    }
+
     @SuppressWarnings("unchecked")
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
@@ -350,6 +440,8 @@ public class Dashboard extends javax.swing.JFrame {
         btn_dumpdata = new javax.swing.JButton();
         btn_connectdb = new javax.swing.JButton();
         jLabel5 = new javax.swing.JLabel();
+        lbl_filedetails = new javax.swing.JLabel();
+        jLabel6 = new javax.swing.JLabel();
         menu_main = new javax.swing.JMenuBar();
         menuItem_file = new javax.swing.JMenu();
         menuItem_compare = new javax.swing.JMenu();
@@ -437,6 +529,13 @@ public class Dashboard extends javax.swing.JFrame {
 
         jLabel5.setText("Details");
 
+        lbl_filedetails.setText("File Name, Fields count, No. of Records");
+
+        jLabel6.setFont(new java.awt.Font("Lucida Grande", 1, 14)); // NOI18N
+        jLabel6.setForeground(new java.awt.Color(0, 51, 153));
+        jLabel6.setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
+        jLabel6.setText("Developed by Nawaz Sarwar");
+
         menuItem_file.setText("File");
         menu_main.add(menuItem_file);
 
@@ -482,22 +581,28 @@ public class Dashboard extends javax.swing.JFrame {
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                         .addComponent(btn_browse)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addComponent(btn_load))
+                        .addComponent(btn_load)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 271, Short.MAX_VALUE)
+                        .addComponent(jLabel6, javax.swing.GroupLayout.PREFERRED_SIZE, 221, javax.swing.GroupLayout.PREFERRED_SIZE))
                     .addGroup(layout.createSequentialGroup()
-                        .addComponent(cbo_dbname, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addComponent(jLabel3)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addComponent(cbo_tablename, javax.swing.GroupLayout.PREFERRED_SIZE, 135, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(btn_connectdb))
-                    .addGroup(layout.createSequentialGroup()
-                        .addComponent(txt_newtablename, javax.swing.GroupLayout.PREFERRED_SIZE, 150, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(btn_createstruc)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addComponent(btn_dumpdata)))
-                .addContainerGap(382, Short.MAX_VALUE))
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(layout.createSequentialGroup()
+                                .addComponent(cbo_dbname, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                                .addComponent(jLabel3)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                                .addComponent(cbo_tablename, javax.swing.GroupLayout.PREFERRED_SIZE, 135, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(btn_connectdb))
+                            .addGroup(layout.createSequentialGroup()
+                                .addComponent(txt_newtablename, javax.swing.GroupLayout.PREFERRED_SIZE, 150, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(btn_createstruc)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                                .addComponent(btn_dumpdata))
+                            .addComponent(lbl_filedetails))
+                        .addGap(0, 0, Short.MAX_VALUE)))
+                .addContainerGap())
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -507,7 +612,8 @@ public class Dashboard extends javax.swing.JFrame {
                     .addComponent(jLabel1)
                     .addComponent(txt_custombasedir, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(btn_browse)
-                    .addComponent(btn_load))
+                    .addComponent(btn_load)
+                    .addComponent(jLabel6))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel2)
@@ -522,7 +628,9 @@ public class Dashboard extends javax.swing.JFrame {
                     .addComponent(btn_createstruc)
                     .addComponent(btn_dumpdata))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(jLabel5)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(jLabel5)
+                    .addComponent(lbl_filedetails))
                 .addGap(18, 18, 18)
                 .addComponent(pane_main))
         );
@@ -578,8 +686,7 @@ public class Dashboard extends javax.swing.JFrame {
     private void btn_connectdbActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btn_connectdbActionPerformed
         try {
             getDatabases();
-            fetchTables();
-            txt_newtablename.setText(onlyDBFfileName);
+            fetchMySQLtables();
         } catch (SQLException ex) {
             Logger.getLogger(Dashboard.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -587,21 +694,29 @@ public class Dashboard extends javax.swing.JFrame {
 
     private void btn_createstrucActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btn_createstrucActionPerformed
 
-        createTable();
+        createMySQLtable();
         try {
             dumpToMySQLtable();
         } catch (FileNotFoundException ex) {
-            Logger.getLogger(Dashboard.class.getName()).log(Level.SEVERE, null, ex);
+//            Logger.getLogger(Dashboard.class.getName()).log(Level.SEVERE, null, ex);
         }
 
     }//GEN-LAST:event_btn_createstrucActionPerformed
 
     private void btn_dumpdataActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btn_dumpdataActionPerformed
         try {
-            createDBF();
+            dumpToMySQLtable();
         } catch (FileNotFoundException ex) {
-            Logger.getLogger(Dashboard.class.getName()).log(Level.SEVERE, null, ex);
+//            Logger.getLogger(Dashboard.class.getName()).log(Level.SEVERE, null, ex);
+            JOptionPane.showMessageDialog(rootPane, "Error : " + ex);
         }
+
+//        try {
+//            createDBF();
+//            dumpToMySQLtable();
+//        } catch (FileNotFoundException ex) {
+//            Logger.getLogger(Dashboard.class.getName()).log(Level.SEVERE, null, ex);
+//        }
     }//GEN-LAST:event_btn_dumpdataActionPerformed
 
     public static void main(String args[]) {
@@ -642,7 +757,9 @@ public class Dashboard extends javax.swing.JFrame {
     private javax.swing.JLabel jLabel3;
     private javax.swing.JLabel jLabel4;
     private javax.swing.JLabel jLabel5;
+    private javax.swing.JLabel jLabel6;
     private javax.swing.JScrollPane jScrollPane2;
+    private javax.swing.JLabel lbl_filedetails;
     private javax.swing.JMenu menuItem_compare;
     private javax.swing.JMenu menuItem_file;
     private javax.swing.JMenuBar menu_main;

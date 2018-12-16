@@ -5,11 +5,11 @@ package dbf.desk;
  */
 public class DBFDesk {
     
-    static String host = "";
-    static String port = "";
-    static String dbuser = "";
+    static String host = "localhost";
+    static String port = "3306";
+    static String dbuser = "root";
     static String dbpassword = "";
-    static String dbname = "";
+    static String dbname = "test";
 
     public static void main(String[] args) {
         if(!checkConnectionInfo()){
